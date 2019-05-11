@@ -1,0 +1,26 @@
+{
+  "name": "cust-subs-management-api",
+  "version": "1.0.0",
+  "description": "One-Map Rest API",
+  "main": "index.js",
+  "scripts": {
+    "server": "nodemon index"
+  },
+  "keywords": [
+    "API",
+    "MongoDB",
+    "ExpressJS"
+  ],
+  "author": "Rizal, Sigit",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^1.18.0"
+  },
+  "dependencies": {
+    "@hapi/joi": "^15.0.2",
+    "assert": "^1.5.0",
+    "body-parser": "^1.19.0",
+    "express": "^4.16.4",
+    "mongodb": "^3.2.4"
+  }
+}
