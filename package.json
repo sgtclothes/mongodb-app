@@ -11,7 +11,7 @@
     "MongoDB",
     "ExpressJS"
   ],
-  "author": "Rizal, Sigit",
+  "author": "Rizal",
   "license": "ISC",
   "devDependencies": {
     "nodemon": "^1.18.0"

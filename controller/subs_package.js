@@ -1,9 +1,8 @@
 const Joi = require('@hapi/joi');
-const assert = require('assert');
 const db = require("../config/db");
 
 const accessListObj = Joi.object().keys({
-    access_id : Joi.string().required(),
+    access_id : Joi.string().alphanum().max(50).required(),
     value: Joi.number().integer(),
     uom : Joi.string()
 })
@@ -46,10 +45,6 @@ function getId (req, res) {
 function create (req,res,next) {
     // Document to be inserted
     const userInput = req.body;
-    var newUserInput = Object.assign({},userInput)
-    for (let i = 0; i < userInput.access_list.length; i++) {
-        newUserInput.access_list[i].access_id = db.getPrimaryKey(userInput.access_list[i].access_id);
-    }
     // Validate document
     // If document is invalid pass to error middleware
     // else insert document within collection
@@ -60,6 +55,11 @@ function create (req,res,next) {
             next(error);
         }
         else{
+            var newUserInput = Object.assign({},userInput)
+            for (var i = 0; i < userInput.access_list.length; i++) {
+                newUserInput.access_list[i].access_id = db.getPrimaryKey(userInput.access_list[i].access_id);
+            }
+
             db.getDB().collection("subs_package").insertOne(newUserInput,(err,result)=>{
                 if(err){
                     const error = new Error("Failed to insert Document");
@@ -79,12 +79,8 @@ function patch (req,res) {
     // Document used to update
     const userInput = req.body;
     var newUserInput = Object.assign({},userInput)
-    if (userInput.access_list.length > 0) {
-        for (let i = 0; i < userInput.access_list.length; i++) {
-            if (userInput.access_list[i].access_id !== undefined) {
-                newUserInput.access_list[i].access_id = db.getPrimaryKey(userInput.access_list[i].access_id);
-            }
-        }
+    for (let i = 0; i < userInput.access_list.length; i++) {
+        newUserInput.access_list[i].access_id = db.getPrimaryKey(userInput.access_list[i].access_id);
     }
     // Find Document By ID and Update
     db.getDB().collection("subs_package").findOneAndUpdate({_id : db.getPrimaryKey(id)},{$set : newUserInput},{returnOriginal : false},(err,result)=>{
