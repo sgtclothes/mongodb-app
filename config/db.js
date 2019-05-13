@@ -1,7 +1,7 @@
 const MongoClient = require("mongodb").MongoClient;
 const ObjectID = require('mongodb').ObjectID;
 // name of our database
-const dbname = "cust-subscription-management";
+const dbname = "onemap";
 // location of where our mongoDB database is located
 const url = "mongodb://localhost:27017";
 // Options for mongoDB
