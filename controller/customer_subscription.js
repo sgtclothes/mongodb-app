@@ -16,9 +16,6 @@ const customerSubscriptionSchema = Joi.object().keys({
 });
 
 function get(req, res) {
-  // get all documents within our collection
-  // send back to user as json
-
   db.getDB()
     .collection("customer_subscription")
     .aggregate(
@@ -40,10 +37,10 @@ function get(req, res) {
 
         cursor.toArray(function(err, results) {
           if (err) {
-            res.status(400).send({ error: err });
+            res.send({ error: err });
           }
           if (results === undefined || results.length === 0) {
-            res.status(400).send({ error: "No documents in database" });
+            res.send({ error: "No documents in database" });
           } else {
             for (let key in results) {
               if (results[key].package.ref_packages) {
@@ -54,17 +51,17 @@ function get(req, res) {
                 );
                 results[key].package.ref_packages = ref_packages;
               } else {
-                results[key].package.name = "";
-                results[key].package.price = "";
+                results[key].package.name = null;
+                results[key].package.price = null;
                 for (keys in results[key].package.access_list) {
-                  results[key].package.access_list[keys].access_id = "";
-                  results[key].package.access_list[keys].value = "";
-                  results[key].package.access_list[keys].uom = "";
+                  results[key].package.access_list[keys].access_id = null;
+                  results[key].package.access_list[keys].value = null;
+                  results[key].package.access_list[keys].uom = null;
                 }
                 results[key].package.ref_packages = ref_packages;
               }
             }
-            res.status(200).send(results);
+            res.send(results);
           }
         });
       }
@@ -73,7 +70,6 @@ function get(req, res) {
 
 function getId(req, res) {
   let id = req.params.id;
-  console.log(id);
   db.getDB()
     .collection("customer_subscription")
     .aggregate(
@@ -122,7 +118,108 @@ function create(req, res, next) {
   // Document to be inserted
 
   let userInput = req.body;
-  let newUserInput = {};
+
+  if (userInput.package.ref_packages === null) {
+    userInput.package.name = null;
+    userInput.package.price = null;
+    userInput.package.access_list = [
+      {
+        access_id: null,
+        value: null,
+        uom: null
+      }
+    ];
+    getResults(userInput);
+  } else {
+    db.getDB()
+      .collection("customer_subscription")
+      .aggregate(
+        [
+          {
+            $lookup: {
+              from: "subs_package",
+              localField: "package.ref_packages",
+              foreignField: "_id",
+              as: "package.packages"
+            }
+          },
+          {
+            $project: { "package.packages._id": 0 }
+          }
+        ],
+        (err, cursor) => {
+          let user = userInput;
+          assert.equal(err, null);
+          cursor.next(function(err, results) {
+            if (err) {
+              res.send({ error: err });
+            } else {
+              let packages = Object.assign({}, ...results.package.packages);
+              user.package.name = packages.name;
+              user.package.price = packages.price;
+              user.package.access_list = [
+                {
+                  access_id: packages.access_list[0].access_id,
+                  value: packages.access_list[0].value,
+                  uom: packages.access_list[0].uom
+                }
+              ];
+              getResults(user);
+            }
+          });
+        }
+      );
+  }
+
+  function getResults(userInput) {
+    let newUserInput = Object.assign({}, userInput);
+
+    if (userInput.business_type_id !== undefined) {
+      newUserInput.business_type_id = db.getPrimaryKey(
+        userInput.business_type_id
+      );
+    }
+    if (userInput.customer_id !== undefined) {
+      newUserInput.customer_id = db.getPrimaryKey(userInput.customer_id);
+    }
+    if (userInput.package.ref_packages !== null) {
+      newUserInput.package.ref_packages = db.getPrimaryKey(
+        userInput.package.ref_packages
+      );
+    } 
+    db.getDB()
+      .collection("customer_subscription")
+      .insertOne(newUserInput, (err, result) => {
+        if (err) {
+          const error = new Error("Failed to insert Document");
+          error.status = 400;
+          next(error);
+        } else {
+          res.send({
+            result: result,
+            document: result.ops[0],
+            msg: "Successfully inserted Data!!!",
+            error: null
+          });
+        }
+      });
+  }
+}
+
+function patch(req, res) {
+  // Primary Key of Document we wish to update
+  const id = req.params.id;
+  // Document used to update
+  const userInput = req.body;
+  var newUserInput = Object.assign({}, userInput);
+  if (userInput.business_type_id !== undefined) {
+    newUserInput.business_type_id = db.getPrimaryKey(
+      userInput.business_type_id
+    );
+  }
+  if (userInput.customer_id !== undefined) {
+    newUserInput.customer_id = db.getPrimaryKey(userInput.customer_id);
+  }
   if (userInput.package.ref_packages == "") {
     userInput.package.name = "";
     userInput.package.price = null;
@@ -133,99 +230,12 @@ function create(req, res, next) {
         uom: ""
       }
     ];
-  }
-
-  newUserInput = Object.assign({}, userInput);
-
-  if (userInput.business_type_id !== undefined) {
-    newUserInput.business_type_id = db.getPrimaryKey(
-      userInput.business_type_id
+  } else {
+    newUserInput.package.ref_packages = db.getPrimaryKey(
+      userInput.package.ref_packages
     );
   }
-  if (userInput.customer_id !== undefined) {
-    newUserInput.customer_id = db.getPrimaryKey(userInput.customer_id);
-  }
-  
-  db.getDB()
-    .collection("customer_subscription")
-    .insertOne(newUserInput, (err, result) => {
-      if (err) {
-        const error = new Error("Failed to insert Document");
-        error.status = 400;
-        next(error);
-      } else {
-        res.status(200).send({
-          result: result,
-          document: result.ops[0],
-          msg: "Successfully inserted Data!!!",
-          error: null
-        });
-      }
-    });
 
-  // Validate document
-  // If document is invalid pass to error middleware
-  // else insert document within collection
-  // Joi.validate(userInput, customerSubscriptionSchema, (err, result) => {
-  //   if (err) {
-  //     const error = new Error("Invalid Input");
-  //     error.status = 400;
-  //     next(error);
-
-  //     res.status(400).send({ err: err.message });
-  //   } else {
-  //     var newUserInput = Object.assign({}, userInput);
-  //     newUserInput.business_type_id = db.getPrimaryKey(
-  //       userInput.business_type_id
-  //     );
-  //     newUserInput.customer_id = db.getPrimaryKey(userInput.customer_id);
-  //     newUserInput.package.ref_packages = db.getPrimaryKey(
-  //       userInput.package.ref_packages
-  //     );
-  //     db.getDB()
-  //       .collection("customer_subscription")
-  //       .insertOne(newUserInput, (err, result) => {
-  //         if (err) {
-  //           const error = new Error("Failed to insert Document");
-  //           error.status = 400;
-  //           next(error);
-  //         } else {
-  //           if (result.ops[0].package.ref_packages == "") {
-  //             result.ops[0].package.name = "";
-  //             result.ops[0].package.price = "";
-  //             for (keys in result.ops[0].package.access_list) {
-  //               result.ops[0].package.access_list[keys].access_id = "";
-  //               result.ops[0].package.access_list[keys].value = "";
-  //               result.ops[0].package.access_list[keys].uom = "";
-  //             }
-  //           }
-  //           res.status(200).send({
-  //             result: result,
-  //             document: result.ops[0],
-  //             msg: "Successfully inserted Data!!!",
-  //             error: null
-  //           });
-  //         }
-  //       });
-  //   }
-  // });
-}
-
-function patch(req, res) {
-  // Primary Key of Document we wish to update
-  const id = req.params.id;
-  // Document used to update
-  const userInput = req.body;
-  var newUserInput = Object.assign({}, userInput);
-  console.log(newUserInput);
-  if (userInput.business_type_id !== undefined) {
-    newUserInput.business_type_id = db.getPrimaryKey(
-      userInput.business_type_id
-    );
-  }
-  if (userInput.customer_id !== undefined) {
-    newUserInput.customer_id = db.getPrimaryKey(userInput.customer_id);
-  }
   // if (userInput.package.ref_packages !== undefined) {
   //   newUserInput.package.ref_packages = db.getPrimaryKey(
   //     userInput.package.ref_packages
