@@ -8,16 +8,20 @@ function get(req, res) {
   let skip = req.query.skip;
   let sorter = req.query.sorter;
   let sorter_val = req.query.sorter_val;
+  let keyword = req.query.keyword;
   let a = new Array();
+  let b = new Array();
+  let c = new RegExp(keyword);
+  b[sorter] = c;
   if (sorter_val == 1 || sorter_val == -1) {
     a[sorter] = parseInt(sorter_val);
   } else {
     a = {};
   }
   let sort = Object.assign({}, a);
-  console.log(sort);
+  let search = Object.assign({}, b);
   model()
-    .find({})
+    .find(search)
     .skip(parseInt((skip - 1) * limit))
     .limit(parseInt(limit))
     .sort(sort)
@@ -31,6 +35,10 @@ function get(req, res) {
         res.send(results);
       }
     });
+
+  //   function search(text) {
+  //     model().find({ $text: { $search: text } });
+  //   }
 }
 
 function getId(req, res) {
@@ -94,15 +102,17 @@ function patch(req, res) {
   );
 }
 
-//delete (customer collection)
 function remove(req, res) {
   // Primary Key of Document
-  const id = req.params.id;
+  const id = req.query._id;
+  //   const status = req.query.status
+  console.log(id);
   // Find Document By ID and delete document from record
-  model().findOneAndDelete({ _id: db.getPrimaryKey(id) }, (err, result) => {
+  model().findOne({ _id: db.getPrimaryKey(id) }, (err, result) => {
     if (err) {
       res.send({ error: err });
     } else {
+      result.status = 1;
       res.send(result);
     }
   });
