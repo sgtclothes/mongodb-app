@@ -208,7 +208,7 @@ function create(req, res, next) {
     }
     model().insertOne(newUserInput, (err, result) => {
       if (err) {
-        res.send(err)
+        res.send(err);
       } else {
         res.send({
           result: result,
@@ -225,17 +225,7 @@ function patch(req, res) {
   // Primary Key of Document we wish to update
   const id = req.params.id;
   let userInput = req.body;
-
-  if (userInput.package.ref_packages === null) {
-    userInput.package.name = null;
-    userInput.package.price = null;
-    userInput.package.access_list = [
-      {
-        access_id: null,
-        value: null,
-        uom: null
-      }
-    ];
+  if (userInput.package.ref_packages == null) {
     getResults(userInput);
   } else {
     model().aggregate(
