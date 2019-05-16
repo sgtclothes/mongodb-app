@@ -103,17 +103,6 @@ function getId(req, res) {
 function create(req, res, next) {
   const userInput = req.body;
   let newUserInput = Object.assign({}, userInput);
-  if (userInput.subscription_id == null) {
-    newUserInput.subscriptions = [];
-  } else {
-    for (let key in userInput.subscription_id) {
-      if (userInput.subscription_id[key]) {
-        newUserInput.subscription_id[key] = db.getPrimaryKey(
-          userInput.subscription_id[key]
-        );
-      }
-    }
-  }
 
   model().insertOne(newUserInput, (err, result) => {
     if (err) {
@@ -132,18 +121,15 @@ function patch(req, res) {
   const id = req.params.id;
   const userInput = req.body;
   let newUserInput = Object.assign({}, userInput);
-  if (userInput.subscription_id !== undefined) {
-    newUserInput.subscription_id = db.getPrimaryKey(userInput.subscription_id);
-  }
   model().findOneAndUpdate(
     { _id: db.getPrimaryKey(id) },
     { $set: newUserInput },
     { returnOriginal: false },
     (err, result) => {
       if (err) {
-        res.status(400).send({ error: err });
+        res.send({ error: err });
       } else {
-        res.status(200).send(result);
+        res.send(result);
       }
     }
   );

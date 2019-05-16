@@ -85,9 +85,9 @@ function patch(req, res) {
     { returnOriginal: false },
     (err, result) => {
       if (err) {
-        res.status(400).send({ error: err });
+        res.send({ error: err });
       } else {
-        res.status(200).send(result);
+        res.send(result);
       }
     }
   );

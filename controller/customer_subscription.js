@@ -208,9 +208,7 @@ function create(req, res, next) {
     }
     model().insertOne(newUserInput, (err, result) => {
       if (err) {
-        const error = new Error("Failed to insert Document");
-        error.status = 400;
-        next(error);
+        res.send(err)
       } else {
         res.send({
           result: result,
@@ -300,9 +298,9 @@ function patch(req, res) {
       { returnOriginal: false },
       (err, result) => {
         if (err) {
-          res.status(400).send({ error: err });
+          res.send({ error: err });
         } else {
-          res.status(200).send(result);
+          res.send(result);
         }
       }
     );
