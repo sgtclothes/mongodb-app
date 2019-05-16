@@ -2,28 +2,32 @@ const db = require("../config/db");
 const { schema, model, Joi } = require("../models/business_type");
 
 function get(req, res) {
-  // get all documents within our collection
-  // send back to user as json
-  let limit = req.query.limit;
-  let skip = req.query.skip;
-  let sorter = req.query.sorter;
-  let sorter_val = req.query.sorter_val;
-  let keyword = req.query.keyword;
+  let { limit, skip, sorter, sorter_val, keyword, key_val } = req.query;
   let a = new Array();
   let b = new Array();
-  let c = new RegExp(keyword);
-  b[sorter] = c;
-  if (sorter_val == 1 || sorter_val == -1) {
+  if (sorter && (sorter_val == 1 || sorter_val == -1)) {
     a[sorter] = parseInt(sorter_val);
   } else {
     a = {};
   }
+  if (keyword && key_val !== undefined) {
+    b[keyword] = new RegExp(key_val);
+  } else {
+    b = {};
+  }
+  if (limit) {
+    limit = parseInt(limit);
+  } else {
+    limit = 0;
+  }
+  if (skip < 1 || undefined) skip = 1;
+  let pageNumber = parseInt((skip - 1) * limit);
   let sort = Object.assign({}, a);
   let search = Object.assign({}, b);
   model()
     .find(search)
-    .skip(parseInt((skip - 1) * limit))
-    .limit(parseInt(limit))
+    .skip(pageNumber)
+    .limit(limit)
     .sort(sort)
     .toArray((err, results) => {
       if (err) {
@@ -35,15 +39,10 @@ function get(req, res) {
         res.send(results);
       }
     });
-
-  //   function search(text) {
-  //     model().find({ $text: { $search: text } });
-  //   }
 }
 
 function getId(req, res) {
   let id = req.params.id;
-  console.log(id);
   model().findOne({ _id: db.getPrimaryKey(id) }, (err, result) => {
     if (err) {
       res.send({ error: err });
@@ -57,37 +56,24 @@ function getId(req, res) {
 }
 
 function create(req, res, next) {
-  // Document to be inserted
   const userInput = req.body;
-
-  // Validate document
-  // If document is invalid pass to error middleware
-  // else insert document within collection
-  Joi.validate(userInput, schema, (err, result) => {
+  if (!userInput.layer_list) userInput.layer_list = [null];
+  model().insertOne(userInput, (err, result) => {
     if (err) {
       res.send(err);
-    } else {
-      model().insertOne(userInput, (err, result) => {
-        if (err) {
-          res.send(err);
-        } else
-          res.send({
-            result: result,
-            document: result.ops[0],
-            msg: "Successfully inserted Data!!!",
-            error: null
-          });
+    } else
+      res.send({
+        result: result,
+        document: result.ops[0],
+        msg: "Successfully inserted Data!!!",
+        error: null
       });
-    }
   });
 }
 
 function patch(req, res) {
-  // Primary Key of Document we wish to update
   const id = req.params.id;
-  // Document used to update
   const userInput = req.body;
-  // Find Document By ID and Update
   model().findOneAndUpdate(
     { _id: db.getPrimaryKey(id) },
     { $set: userInput },
@@ -102,26 +88,9 @@ function patch(req, res) {
   );
 }
 
-function remove(req, res) {
-  // Primary Key of Document
-  const id = req.query._id;
-  //   const status = req.query.status
-  console.log(id);
-  // Find Document By ID and delete document from record
-  model().findOne({ _id: db.getPrimaryKey(id) }, (err, result) => {
-    if (err) {
-      res.send({ error: err });
-    } else {
-      result.status = 1;
-      res.send(result);
-    }
-  });
-}
-
 module.exports = {
   get,
   getId,
   create,
-  patch,
-  remove
+  patch
 };

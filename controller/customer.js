@@ -1,142 +1,157 @@
-const Joi = require('@hapi/joi');
-const assert = require('assert');
 const db = require("../config/db");
+const { schema, model, Joi, assert } = require("../models/customer");
 
-const customerSchema = Joi.object().keys({
-    customer_type : Joi.string().required(),
-    customer_id : Joi.string().required(),
-    id_type : Joi.string().required(),
-    name : Joi.string()
-});
+function get(req, res) {
+  let { limit, skip, sorter, sorter_val, keyword, key_val } = req.query;
+  let sort = new Array();
+  let search = new Array();
+  let aggregate = [
+    {
+      $lookup: {
+        from: "customer_subscription",
+        localField: "_id",
+        foreignField: "customer_id",
+        as: "subscriptions"
+      }
+    },
+    { $project: { "subscriptions._id": 0 } }
+  ];
 
-function get (req,res) {
-    // get all documents within our collection
-    // send back to user as json
-    db.getDB().collection("customer").aggregate(
-        [ { "$lookup": 
-              {
-                  "from": "customer_subscription",
-                  "localField" : "_id",
-                  "foreignField": "customer_id",
-                  "as": "subscriptions"
-              }
-          },
-          { "$project": { "subscriptions._id" : 0 } }
-        ],
-        (err, cursor) => {
-          assert.equal(err, null);
-  
-          cursor.toArray(function(err, results) {
-            if (err) {
-                res.status(400).send({'error': err})
-            }
-            if (results === undefined || results.length === 0) {
-                res.status(400).send({'error':'No documents in database'})
-            } else {
-                res.status(200).send(results)
-            }
-          });
-        }
-    );
-};
+  if (sorter && (sorter_val == 1 || sorter_val == -1)) {
+    sort[sorter] = parseInt(sorter_val);
+  } else {
+    sort = null;
+  }
+  if (keyword && key_val !== undefined) {
+    search[keyword] = new RegExp(key_val);
+  } else {
+    search = null;
+  }
+  if (limit) {
+    limit = parseInt(limit);
+  } else {
+    limit = undefined;
+  }
 
-function getId (req, res) {
-    let id = req.params.id
-    db.getDB().collection("customer").aggregate(
-        [ { "$lookup": 
-              {
-                  "from": "customer_subscription",
-                  "localField" : "_id",
-                  "foreignField": "customer_id",
-                  "as": "subscriptions"
-              }
-          },
-          { "$match" : 
-              { 
-                  "_id" : db.getPrimaryKey(id)
-              } 
-          },
-          { "$project": { "subscriptions._id" : 0 } }
-        ],
-        (err, cursor) => {
-          assert.equal(err, null);
-  
-          cursor.toArray(function(err, result) {
-            if (err) {
-                res.status(400).send({'error': err})
-            }
-            if (result === undefined) {
-                res.status(400).send({'error':'No documents in database'})
-            } else {
-                res.status(200).send(result)
-            }
-          });
-        }
-    );
+  if (search !== null) {
+    aggregate.push({ $match: Object.assign({}, search) });
+  }
+
+  if (skip !== undefined && limit !== undefined) {
+    let pageNumber = parseInt((skip - 1) * limit);
+    aggregate.push({ $skip: pageNumber });
+  }
+  if (limit !== undefined && limit !== 0) {
+    aggregate.push({ $limit: limit });
+  }
+  if (sort !== null) {
+    aggregate.push({ $sort: Object.assign({}, sort) });
+  }
+
+  model().aggregate(aggregate, (err, cursor) => {
+    assert.equal(err, null);
+
+    cursor.toArray(function(err, results) {
+      if (err) {
+        res.send({ error: err });
+      }
+      if (results === undefined || results.length === 0) {
+        res.send({ error: "No documents in database" });
+      } else {
+        res.send(results);
+      }
+    });
+  });
 }
 
-function create (req,res,next) {
-    // Document to be inserted
-    const userInput = req.body;
-    
-    // Validate document
-    // If document is invalid pass to error middleware
-    // else insert document within collection
-    Joi.validate(userInput, customerSchema,(err,result)=>{
-        if(err){
-            const error = new Error("Invalid Input");
-            error.status = 400;
-            next(error);
+function getId(req, res) {
+  let id = req.params.id;
+  model().aggregate(
+    [
+      {
+        $lookup: {
+          from: "customer_subscription",
+          localField: "_id",
+          foreignField: "customer_id",
+          as: "subscriptions"
         }
-        else{
-            db.getDB().collection("customer").insertOne(userInput,(err,result)=>{
-                if(err){
-                    const error = new Error("Failed to insert Document");
-                    error.status = 400;
-                    next(error);
-                }
-                else
-                    res.status(200).send({result : result, document : result.ops[0], msg : "Successfully inserted Data!!!",error : null});
-            });
+      },
+      {
+        $match: {
+          _id: db.getPrimaryKey(id)
         }
-    })    
-};
+      },
+      { $project: { "subscriptions._id": 0 } }
+    ],
+    (err, cursor) => {
+      assert.equal(err, null);
 
-function patch (req,res) {
-    // Primary Key of Document we wish to update
-    const id = req.params.id;
-    // Document used to update
-    const userInput = req.body;
-    // Find Document By ID and Update
-    db.getDB().collection("customer").findOneAndUpdate({_id : db.getPrimaryKey(id)},{$set : userInput},{returnOriginal : false},(err,result)=>{
+      cursor.toArray(function(err, result) {
         if (err) {
-            res.status(400).send({'error': err})
+          res.send({ error: err });
         }
-        else{
-            res.status(200).send(result);
-        }      
-    });
-};
+        if (result === undefined) {
+          res.send({ error: "No documents in database" });
+        } else {
+          res.send(result);
+        }
+      });
+    }
+  );
+}
 
-//delete (customer collection)
-function remove (req,res) {
-    // Primary Key of Document
-    const id = req.params.id;
-    // Find Document By ID and delete document from record
-    db.getDB().collection("customer").findOneAndDelete({_id : db.getPrimaryKey(id)},(err,result)=>{
-        if (err) {
-            res.status(400).send({'error': err})
-        }
-        else{
-            res.status(200).send(result);
-        } 
-    });
-};
+function create(req, res, next) {
+  const userInput = req.body;
+  let newUserInput = Object.assign({}, userInput);
+  if (userInput.subscription_id == null) {
+    newUserInput.subscriptions = [];
+  } else {
+    for (let key in userInput.subscription_id) {
+      if (userInput.subscription_id[key]) {
+        newUserInput.subscription_id[key] = db.getPrimaryKey(
+          userInput.subscription_id[key]
+        );
+      }
+    }
+  }
+
+  model().insertOne(newUserInput, (err, result) => {
+    if (err) {
+      res.send(err);
+    } else
+      res.send({
+        result: result,
+        document: result.ops[0],
+        msg: "Successfully inserted Data!!!",
+        error: null
+      });
+  });
+}
+
+function patch(req, res) {
+  const id = req.params.id;
+  const userInput = req.body;
+  let newUserInput = Object.assign({}, userInput);
+  if (userInput.subscription_id !== undefined) {
+    newUserInput.subscription_id = db.getPrimaryKey(userInput.subscription_id);
+  }
+  model().findOneAndUpdate(
+    { _id: db.getPrimaryKey(id) },
+    { $set: newUserInput },
+    { returnOriginal: false },
+    (err, result) => {
+      if (err) {
+        res.status(400).send({ error: err });
+      } else {
+        res.status(200).send(result);
+      }
+    }
+  );
+}
 
 module.exports = {
-    get,
-    getId,
-    create,
-    patch,
-    remove
-  }
+  get,
+  getId,
+  create,
+  patch
+};

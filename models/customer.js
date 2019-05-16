@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const Joi = require('@hapi/joi');
+const assert = require("assert");
 
 const schema = Joi.object().keys({
     customer_type : Joi.string().required(),
@@ -15,5 +16,6 @@ function model() {
 module.exports = {
     schema,
     model,
-    Joi
+    Joi,
+    assert
 }
