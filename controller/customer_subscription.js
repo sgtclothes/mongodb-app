@@ -6,6 +6,8 @@ const {
   model
 } = require("../models/customer_subscription");
 
+let isEdited = false;
+
 function get(req, res) {
   let { limit, skip, sorter, sorter_val, keyword, key_val } = req.query;
   let sort = new Array();
@@ -115,10 +117,10 @@ function getId(req, res) {
 
       cursor.toArray(function(err, result) {
         if (err) {
-          res.status(400).send({ error: err });
+          res.send({ error: err });
         }
         if (result === undefined) {
-          res.status(400).send({ error: "No documents in database" });
+          res.send({ error: "No documents in database" });
         } else {
           for (let key in result) {
             let ref_packages = result[key].package.ref_packages;
@@ -128,7 +130,7 @@ function getId(req, res) {
             );
             result[key].package.ref_packages = ref_packages;
           }
-          res.status(200).send(result);
+          res.send(result);
         }
       });
     }
@@ -140,7 +142,8 @@ function create(req, res, next) {
 
   let userInput = req.body;
 
-  if (userInput.package.ref_packages === null) {
+  if (userInput.package.ref_packages === null && isEdited == false) {
+    isEdited = true;
     userInput.package.name = null;
     userInput.package.price = null;
     userInput.package.access_list = [
@@ -226,6 +229,15 @@ function patch(req, res) {
   const id = req.params.id;
   let userInput = req.body;
   if (userInput.package.ref_packages == null) {
+    userInput.package.name = null;
+    userInput.package.price = null;
+    userInput.package.access_list = [
+      {
+        access_id: null,
+        value: null,
+        uom: null
+      }
+    ];
     getResults(userInput);
   } else {
     model().aggregate(
