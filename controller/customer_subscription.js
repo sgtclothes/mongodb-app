@@ -6,130 +6,155 @@ const {
   model
 } = require("../models/customer_subscription");
 
-let isEdited = false;
+let contains = function(needle) {
+  let findNaN = needle !== needle;
+  let indexOf;
+
+  if (!findNaN && typeof Array.prototype.indexOf === "function") {
+    indexOf = Array.prototype.indexOf;
+  } else {
+    indexOf = function(needle) {
+      var i = -1,
+        index = -1;
+
+      for (i = 0; i < this.length; i++) {
+        var item = this[i];
+
+        if ((findNaN && item !== item) || item === needle) {
+          index = i;
+          break;
+        }
+      }
+
+      return index;
+    };
+  }
+
+  return indexOf.call(this, needle) > -1;
+};
 
 function get(req, res) {
-  let { limit, skip, sorter, sorter_val, keyword, key_val } = req.query;
-  let sort = new Array();
-  let search = new Array();
-  let aggregate = [
-    {
-      $lookup: {
-        from: "subs_package",
-        localField: "package.ref_packages",
-        foreignField: "_id",
-        as: "package.packages"
-      }
-    },
-    {
-      $project: { "package.packages._id": 0 }
-    }
-  ];
+  let customerids = [];
+  let regex = {};
+  let arrayUrl = req.url.slice(1).split("/");
 
-  if (sorter && (sorter_val == 1 || sorter_val == -1)) {
-    sort[sorter] = parseInt(sorter_val);
-  } else {
-    sort = null;
-  }
-  if (keyword && key_val !== undefined) {
-    search[keyword] = new RegExp(key_val);
-  } else {
-    search = null;
-  }
-  if (limit) {
-    limit = parseInt(limit);
-  } else {
-    limit = undefined;
-  }
-
-  if (search !== null) {
-    aggregate.push({ $match: Object.assign({}, search) });
-  }
-
-  if (skip !== undefined && limit !== undefined) {
-    let pageNumber = parseInt((skip - 1) * limit);
-    aggregate.push({ $skip: pageNumber });
-  }
-  if (limit !== undefined && limit !== 0) {
-    aggregate.push({ $limit: limit });
-  }
-  if (sort !== null) {
-    aggregate.push({ $sort: Object.assign({}, sort) });
-  }
-
-  model().aggregate(aggregate, (err, cursor) => {
-    assert.equal(err, null);
-
-    cursor.toArray(function(err, results) {
-      if (err) {
-        res.send({ error: err });
-      }
-      if (results === undefined || results.length === 0) {
-        res.send({ error: "No documents in database" });
+  function match(array, key) {
+    let match = contains.call(array, key);
+    if (match == true) {
+      let index = array.indexOf(key);
+      let value = array[index + 1];
+      if (key == "search" || key == "sort") {
+        let key_val = array[index + 2];
+        let arr_val = [value, key_val];
+        return arr_val;
       } else {
-        for (let key in results) {
-          if (results[key].package.ref_packages !== null) {
-            let ref_packages = results[key].package.ref_packages;
-            results[key].package = Object.assign(
-              {},
-              ...results[key].package.packages
-            );
-            results[key].package.ref_packages = ref_packages;
+        return value;
+      }
+    } else {
+      return;
+    }
+  }
+
+  function getData(arr) {
+    let checkId = arrayUrl[0];
+    model()
+      .find(arr[0])
+      .sort(arr[1])
+      .skip(arr[2])
+      .limit(parseInt(arr[3]))
+      .toArray((err, results) => {
+        if (results === undefined || results.length === 0) {
+          res.send({ error: "No documents in database" });
+        } else {
+          for (let key in results) {
+            customerids.push(results[key].customer_id.toString());
+          }
+          let match = contains.call(customerids, checkId);
+          if (match == true) {
+            getId(req, res);
           } else {
-            results[key].package.ref_packages = null;
-            results[key].package.name = null;
-            results[key].package.price = null;
-            for (keys in results[key].package.access_list) {
-              results[key].package.access_list[keys].access_id = null;
-              results[key].package.access_list[keys].value = null;
-              results[key].package.access_list[keys].uom = null;
-            }
-            delete results[key].package.packages;
+            res.send(results);
           }
         }
-        res.send(results);
-      }
-    });
-  });
+      });
+  }
+
+  let search = match(arrayUrl, "search");
+  let sort = match(arrayUrl, "sort");
+  let page = match(arrayUrl, "skip");
+  let limit = match(arrayUrl, "limit");
+
+  if (search !== undefined) {
+    regex = {
+      [search[0]]: { $regex: new RegExp(search[1], "i") }
+    };
+  } else {
+    regex = {};
+  }
+
+  let a = new Array();
+  if (sort !== undefined) {
+    if (sort[0] && (parseInt(sort[1]) == 1 || parseInt(sort[1]) == -1)) {
+      a[sort[0]] = parseInt(sort[1]);
+    } else {
+      a = {};
+    }
+  } else {
+    a = {};
+  }
+
+  let sorting = Object.assign({}, a);
+
+  if (page < 1 || undefined) page = 1;
+  let pageNumber = (page - 1) * limit;
+
+  let arrModel = [regex, sorting, pageNumber, limit];
+  getData(arrModel);
 }
 
 function getId(req, res) {
-  let id = req.params.id;
+  let id = req.url.slice(1);
   model().aggregate(
     [
       {
-        $lookup: {
-          from: "subs_package",
-          localField: "package.ref_packages",
-          foreignField: "_id",
-          as: "package.packages"
+        $match: { customer_id: db.getPrimaryKey(id) }
+      },
+      {
+        $project: {
+          _id: 0,
+          business_type_id: 0,
+          periode: 0,
+          unit: 0,
+          value: 0
         }
-      },
-      {
-        $project: { "package.packages._id": 0 }
-      },
-      {
-        $match: { _id: db.getPrimaryKey(id) }
       }
     ],
     (err, cursor) => {
       assert.equal(err, null);
 
-      cursor.toArray(function(err, result) {
+      cursor.toArray(function(err, results) {
         if (err) {
           res.send({ error: err });
         }
-        if (result === undefined) {
+        if (results === undefined) {
           res.send({ error: "No documents in database" });
         } else {
-          for (let key in result) {
-            let ref_packages = result[key].package.ref_packages;
-            result[key].package = Object.assign(
-              {},
-              ...result[key].package.packages
-            );
-            result[key].package.ref_packages = ref_packages;
+          var result = new Object();
+          result.customer_id = results[0].customer_id;
+          result.subscriptions = [];
+          for (let key in results) {
+            var name = results[key].package.name;
+            var price = results[key].package.price;
+            var access_list = results[key].package.access_list;
+            var ref_packages = results[key].package.ref_packages;
+            result.subscriptions.push({
+              ref_packages,
+              name,
+              price,
+              access_list
+            });
           }
+
           res.send(result);
         }
       });
@@ -142,7 +167,7 @@ function create(req, res, next) {
 
   let userInput = req.body;
 
-  if (userInput.package.ref_packages === null && isEdited == false) {
+  if (userInput.package.ref_packages === null) {
     isEdited = true;
     userInput.package.name = null;
     userInput.package.price = null;
